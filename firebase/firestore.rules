@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The deployed Streamlit server uses the Admin SDK and bypasses these rules.
+    // Deny direct browser Firestore access; this prevents clients from reading
+    // unrevealed market data or modifying game/leaderboard documents.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

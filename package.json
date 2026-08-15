@@ -1,0 +1,12 @@
+{
+  "name": "trading-competition",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local launcher for the Streamlit trading competition app.",
+  "scripts": {
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\run.ps1",
+    "start": "npm run dev",
+    "data:mock": "python scripts/generate_market_data.py --synthetic",
+    "data:live": "python scripts/generate_market_data.py"
+  }
+}
