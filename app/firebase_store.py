@@ -39,11 +39,41 @@ def game_snapshot() -> dict[str, Any]:
 
 
 def game_index(game: dict[str, Any]) -> int:
-    if game.get("status") != "running":
-        return int(game.get("max_index", 251)) if game.get("status") == "finished" else 0
-    elapsed = max(0.0, (utc_now() - _as_utc(game["start_at"])).total_seconds())
-    return min(int(elapsed // int(game["tick_seconds"])), int(game["max_index"]))
+    status = game.get("status")
 
+    if status == "finished":
+        return int(game.get("max_index", 251))
+
+    if status in {"waiting", "scheduled"}:
+        return 0
+
+    start_at = _as_utc(game["start_at"])
+    now = utc_now()
+
+    # Total time the market has already spent paused.
+    total_paused = float(game.get("total_paused_seconds", 0.0))
+
+    # If currently paused, do NOT count the time since paused_at.
+    if status == "paused":
+        paused_at = game.get("paused_at")
+
+        if paused_at:
+            paused_at = _as_utc(paused_at)
+            effective_now = paused_at
+        else:
+            effective_now = now
+    else:
+        effective_now = now
+
+    elapsed = max(
+        0.0,
+        (effective_now - start_at).total_seconds() - total_paused
+    )
+
+    return min(
+        int(elapsed // int(game["tick_seconds"])),
+        int(game.get("max_index", 251))
+    )
 
 def start_game(game_id: str) -> None:
     """Atomically starts/restarts a game. Only the admin route calls this."""
@@ -58,8 +88,81 @@ def start_game(game_id: str) -> None:
             "start_at": utc_now(),
             "tick_seconds": TICK_SECONDS,
             "max_index": 251,
+
+            # Pause support
+            "paused_at": None,
+            "total_paused_seconds": 0.0,
+
             "updated_at": firestore.SERVER_TIMESTAMP,
         })
+
+    apply(transaction)
+
+def pause_game() -> None:
+    """Pause the currently running game."""
+    ref = db().collection("games").document(GAME_DOC)
+    transaction = db().transaction()
+
+    @firestore.transactional
+    def apply(transaction):
+        snap = transaction.get(ref)
+
+        if not snap.exists:
+            raise ValueError("No active game.")
+
+        game = snap.to_dict()
+
+        if game.get("status") != "running":
+            raise ValueError("The game is not currently running.")
+
+        transaction.update(ref, {
+            "status": "paused",
+            "paused_at": utc_now(),
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        })
+
+    apply(transaction)
+
+
+def resume_game() -> None:
+    """Resume a paused game without advancing the market during the pause."""
+    ref = db().collection("games").document(GAME_DOC)
+    transaction = db().transaction()
+
+    @firestore.transactional
+    def apply(transaction):
+        snap = transaction.get(ref)
+
+        if not snap.exists:
+            raise ValueError("No active game.")
+
+        game = snap.to_dict()
+
+        if game.get("status") != "paused":
+            raise ValueError("The game is not currently paused.")
+
+        paused_at = game.get("paused_at")
+
+        if not paused_at:
+            raise ValueError("Paused game is missing paused_at.")
+
+        paused_at = _as_utc(paused_at)
+        pause_duration = max(
+            0.0,
+            (utc_now() - paused_at).total_seconds()
+        )
+
+        total_paused = float(
+            game.get("total_paused_seconds", 0.0)
+        )
+
+        transaction.update(ref, {
+            "status": "running",
+            "paused_at": None,
+            "total_paused_seconds": total_paused + pause_duration,
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        })
+
     apply(transaction)
 
 
