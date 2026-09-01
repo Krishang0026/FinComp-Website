@@ -11,6 +11,9 @@ Production-oriented Streamlit application for a synchronized, multi-user trading
 - Plotly candlesticks that receive only the slice through the active candle.
 - Tick-idempotent leaderboard publishing: each student writes at most one leaderboard document per candle index, even if Streamlit reruns multiple times.
 - Public stage leaderboard at `/?view=leaderboard`, refreshing every 10 seconds.
+- Professor-controlled market pause/resume. Pausing freezes the
+  server-synchronized market clock, disables trading, and allows
+  instructors to explain concepts before resuming.
 
 ## Local setup
 
@@ -41,7 +44,14 @@ Production-oriented Streamlit application for a synchronized, multi-user trading
 
 ```
 games/current
-  game_id, status, start_at, tick_seconds, max_index, updated_at
+  game_id
+  status
+  start_at
+  tick_seconds
+  max_index
+  paused_at
+  total_paused_seconds
+  updated_at
 
 users/{firebase_uid}
   student_id, nickname, created_at
