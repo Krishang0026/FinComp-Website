@@ -11,7 +11,7 @@ from auth import cookies, restore_session, sign_in, sign_out, sign_up
 from config import ASSETS, firebase_is_configured, is_admin
 from firebase_store import (ensure_profile, execute_market_order, game_snapshot,
                             get_or_create_portfolio, publish_leaderboard,
-                            start_game, top_twenty, db)
+                            start_game, pause_game, resume_game, top_twenty, db)
 from market_data import load_market_data, portfolio_value, public_candles
 
 st.set_page_config(page_title="Trading Competition", page_icon="📈", layout="wide")
@@ -101,7 +101,21 @@ def dashboard_fragment(uid: str, profile: dict, market: dict) -> None:
     total = portfolio_value(portfolio, market, index)
     if game.get("status") == "running":
         total = publish_leaderboard(uid, profile, portfolio, game, market)
-    st.caption(f"Game: {game['game_id']} · Candle {index + 1}/{game['max_index'] + 1} · {game.get('status', 'waiting').upper()}")
+    status = game.get("status", "waiting")
+
+    st.caption(
+      f"Game: {game['game_id']} · "
+      f"Candle {index + 1}/{game['max_index'] + 1}"
+    )
+
+    if status == "paused":
+      st.warning(
+          "🟡 MARKET PAUSED\n\n"
+          "The professor has temporarily paused the market. "
+          "Prices and trading are frozen."
+      )
+    elif status == "running":
+      st.success("🟢 MARKET LIVE")
     first, second, third = st.columns(3)
     first.metric("Cash", money(float(portfolio["cash"])))
     second.metric("Portfolio Value", money(total))
@@ -146,17 +160,86 @@ def dashboard_fragment(uid: str, profile: dict, market: dict) -> None:
 
 
 def render_admin(profile: dict) -> None:
-    with st.expander("Professor controls", expanded=False):
+    with st.expander("Professor controls", expanded=True):
         game = game_snapshot()
-        st.write(f"Current: **{game.get('status', 'waiting')}** · {game.get('game_id') or 'No active game'}")
-        game_id = st.text_input("New game ID", value=datetime.now().strftime("class-%Y%m%d-%H%M"))
-        if st.button("START GAME", type="primary"):
-            if not game_id.strip():
-                st.error("Game ID is required.")
-            else:
-                start_game(game_id.strip())
-                st.success("Game started. All clients now calculate the same clock from Firestore start_at.")
 
+        status = game.get("status", "waiting")
+        game_id = game.get("game_id")
+
+        st.markdown("### Professor controls")
+
+        if status == "running":
+            st.success(
+                f"🟢 MARKET LIVE  ·  {game_id or 'No active game'}"
+            )
+
+        elif status == "paused":
+            st.warning(
+                f"🟡 MARKET PAUSED  ·  {game_id or 'No active game'}"
+            )
+
+        elif status == "finished":
+            st.info(
+                f"Competition finished  ·  {game_id or 'No active game'}"
+            )
+
+        else:
+            st.info("Waiting for a competition to start.")
+
+        st.caption(
+            f"Candle {game.get('index', 0) + 1} / "
+            f"{game.get('max_index', 251) + 1}"
+        )
+
+        st.divider()
+
+        new_game_id = st.text_input(
+            "New game ID",
+            value=datetime.now().strftime("class-%Y%m%d-%H%M")
+        )
+
+        if status not in {"running", "paused"}:
+            if st.button("START GAME", type="primary", use_container_width=True):
+                if not new_game_id.strip():
+                    st.error("Game ID is required.")
+                else:
+                    try:
+                        start_game(new_game_id.strip())
+                        st.success(
+                            "Game started. All clients are synchronized."
+                        )
+                        st.rerun()
+                    except Exception as error:
+                        st.error(str(error))
+
+        elif status == "running":
+            if st.button(
+                "⏸ PAUSE MARKET",
+                use_container_width=True
+            ):
+                try:
+                    pause_game()
+                    st.success(
+                        "Market paused. All participants are now frozen."
+                    )
+                    st.rerun()
+                except ValueError as error:
+                    st.error(str(error))
+
+        elif status == "paused":
+            if st.button(
+                "▶ RESUME MARKET",
+                type="primary",
+                use_container_width=True
+            ):
+                try:
+                    resume_game()
+                    st.success(
+                        "Market resumed."
+                    )
+                    st.rerun()
+                except ValueError as error:
+                    st.error(str(error))
 
 def main() -> None:
     # Credentials are optional for UI review. The production path below is
