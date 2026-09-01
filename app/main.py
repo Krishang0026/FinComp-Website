@@ -13,9 +13,155 @@ from firebase_store import (ensure_profile, execute_market_order, game_snapshot,
                             get_or_create_portfolio, publish_leaderboard,
                             start_game, pause_game, resume_game, top_twenty, db)
 from market_data import load_market_data, portfolio_value, public_candles
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+LOGO_PATH = ROOT / "assets" / "ecofin_logo.jpeg"
 
 st.set_page_config(page_title="Trading Competition", page_icon="📈", layout="wide")
 
+def render_brand() -> None:
+    if LOGO_PATH.exists():
+        left, right = st.columns([0.18, 0.82])
+
+        with left:
+            st.image(str(LOGO_PATH), width=70)
+
+        with right:
+            st.markdown(
+                """
+                <div class="brand-title">
+                    ECOFIN
+                </div>
+                <div class="brand-subtitle">
+                    TRADING COMPETITION
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    else:
+        st.markdown(
+            """
+            <div class="brand-title">
+                ECOFIN
+            </div>
+            <div class="brand-subtitle">
+                TRADING COMPETITION
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+def apply_styles() -> None:
+    st.markdown(
+        """
+        <style>
+
+        /* ---------- GLOBAL ---------- */
+
+        .stApp {
+            background:
+                radial-gradient(
+                    circle at top right,
+                    rgba(22, 199, 154, 0.07),
+                    transparent 30%
+                ),
+                #080d14;
+            color: #e8eef7;
+        }
+
+        .block-container {
+            max-width: 1450px;
+            padding-top: 2rem;
+            padding-bottom: 3rem;
+        }
+
+        /* ---------- BRAND ---------- */
+
+        .brand-title {
+            font-size: 2rem;
+            font-weight: 850;
+            letter-spacing: -1px;
+            line-height: 1;
+        }
+
+        .brand-subtitle {
+            color: #8e9bad;
+            font-size: .78rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-top: 7px;
+        }
+
+        /* ---------- CARDS ---------- */
+
+        .dashboard-card {
+            background: linear-gradient(
+                145deg,
+                #111925,
+                #0d141e
+            );
+            border: 1px solid #243246;
+            border-radius: 14px;
+            padding: 18px 20px;
+        }
+
+        .card-label {
+            color: #8795aa;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+        }
+
+        .card-value {
+            font-size: 1.55rem;
+            font-weight: 800;
+            margin-top: 5px;
+        }
+
+        /* ---------- MARKET STATUS ---------- */
+
+        .market-live {
+            background: rgba(22, 199, 154, .09);
+            border: 1px solid rgba(22, 199, 154, .3);
+            border-radius: 12px;
+            padding: 13px 16px;
+        }
+
+        .market-paused {
+            background: rgba(245, 185, 66, .09);
+            border: 1px solid rgba(245, 185, 66, .3);
+            border-radius: 12px;
+            padding: 13px 16px;
+        }
+
+        /* ---------- BUTTONS ---------- */
+
+        .stButton > button {
+            border-radius: 9px;
+            font-weight: 750;
+            min-height: 42px;
+        }
+
+        /* ---------- SIDEBAR ---------- */
+
+        [data-testid="stSidebar"] {
+            background: #0d141e;
+            border-right: 1px solid #202c3d;
+        }
+
+        /* ---------- TABLES ---------- */
+
+        [data-testid="stDataFrame"] {
+            border: 1px solid #243246;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def money(value: float) -> str:
     return f"${value:,.2f}"
@@ -120,7 +266,7 @@ def dashboard_fragment(uid: str, profile: dict, market: dict) -> None:
     first.metric("Cash", money(float(portfolio["cash"])))
     second.metric("Portfolio Value", money(total))
     third.metric("Open Positions", len(portfolio.get("positions", {})))
-    selected = st.selectbox("Asset", ASSETS, key="asset_picker")
+    selected = st.selectbox("SELECT ASSET", ASSETS, key="asset_picker")
     left, right = st.columns([3, 1])
     with left:
         st.plotly_chart(chart(selected, public_candles(market[selected], index)), use_container_width=True, config={"displaylogo": False})
@@ -133,6 +279,7 @@ def dashboard_fragment(uid: str, profile: dict, market: dict) -> None:
             percent = None
         else:
             percent = float(st.number_input("Percentage", min_value=1.0, max_value=100.0, step=1.0, key="pct"))
+            
             price = float(market[selected].iloc[index]["Close"])
             st.caption("Buy uses cash; sell uses your current position.")
             quantity = 1  # Converted to a side-specific quantity after the button is chosen.
@@ -244,6 +391,7 @@ def render_admin(profile: dict) -> None:
 def main() -> None:
     # Credentials are optional for UI review. The production path below is
     # untouched and activates automatically as soon as Firebase is configured.
+    apply_styles()
     if not firebase_is_configured():
         from demo import render
         render()
@@ -274,7 +422,7 @@ def main() -> None:
     if is_admin(profile["student_id"]):
         render_admin(profile)
     market = load_market_data()
-    st.title("Trading Dashboard")
+    render_brand()
     dashboard_fragment(uid, profile, market)
 
 
