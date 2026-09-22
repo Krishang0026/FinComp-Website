@@ -164,7 +164,42 @@ def render_brand() -> None:
         )
 
 
-def chart(asset: str, candles: pd.DataFrame) -> go.Figure:
+def chart(
+    asset: str,
+    candles: pd.DataFrame,
+    period: str = "All",
+) -> go.Figure:
+
+    candles = candles.copy()
+
+    if candles.empty:
+
+        return go.Figure()
+
+    candles["Date"] = pd.to_datetime(
+        candles["Date"]
+    )
+
+    latest_date = candles["Date"].max()
+
+    period_offsets = {
+        "1 Month": pd.DateOffset(months=1),
+        "3 Months": pd.DateOffset(months=3),
+        "6 Months": pd.DateOffset(months=6),
+        "1 Year": pd.DateOffset(years=1),
+    }
+
+    if period in period_offsets:
+
+        cutoff = (
+            latest_date
+            - period_offsets[period]
+        )
+
+        candles = candles[
+            candles["Date"] >= cutoff
+        ]
+
     figure = go.Figure(
         go.Candlestick(
             x=candles["Date"],
@@ -179,12 +214,22 @@ def chart(asset: str, candles: pd.DataFrame) -> go.Figure:
     figure.update_layout(
         template="plotly_dark",
         height=510,
-        margin=dict(l=10, r=10, t=35, b=10),
-        title=f"{asset} — revealed market history",
+        margin=dict(
+            l=10,
+            r=10,
+            t=35,
+            b=10,
+        ),
+        title=(
+            f"{asset} · {period}"
+        ),
         xaxis_rangeslider_visible=False,
         paper_bgcolor="#0e1117",
         plot_bgcolor="#0e1117",
+        hovermode="x unified",
     )
+
+    return figure
 
     return figure
 
@@ -625,9 +670,22 @@ def dashboard_fragment(
     # --------------------------------------------------------
 
     selected = st.selectbox(
-        "Asset",
-        ASSETS,
-        key="asset_picker",
+    "SELECT ASSET",
+    ASSETS,
+    key="asset_picker",
+    )
+
+    period = st.radio(
+        "CHART PERIOD",
+        [
+            "1 Month",
+            "3 Months",
+            "6 Months",
+            "1 Year",
+            "All",
+        ],
+        horizontal=True,
+        key="chart_period",
     )
 
     left, right = st.columns(
@@ -640,19 +698,22 @@ def dashboard_fragment(
 
     with left:
 
-        st.plotly_chart(
-            chart(
-                selected,
-                public_candles(
-                    market[selected],
-                    index,
-                ),
-            ),
-            use_container_width=True,
-            config={
-                "displaylogo": False
-            },
-        )
+    revealed_candles = public_candles(
+        market[selected],
+        index,
+    )
+
+    st.plotly_chart(
+        chart(
+            selected,
+            revealed_candles,
+            period,
+        ),
+        use_container_width=True,
+        config={
+            "displaylogo": False
+        },
+    )
 
     # --------------------------------------------------------
     # Trading panel
