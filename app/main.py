@@ -697,12 +697,10 @@ def dashboard_fragment(
     # --------------------------------------------------------
 
     with left:
-
         revealed_candles = public_candles(
             market[selected],
             index,
         )
-
         st.plotly_chart(
             chart(
                 selected,
@@ -710,9 +708,8 @@ def dashboard_fragment(
                 period,
             ),
             use_container_width=True,
-            config={
-                "displaylogo": False
-            },
+            config={"displaylogo": False},
+        )
     )
 
     # --------------------------------------------------------
