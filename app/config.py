@@ -5,7 +5,33 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
-ASSETS = ("AAPL", "TSLA", "NVDA", "BTC-USD", "ETH-USD")
+ASSETS = (
+    "HDFCBANK",
+    "ICICIBANK",
+    "SBIN",
+    "PAYTM",
+    "BAJFINANCE",
+    "TCS",
+    "INFY",
+    "WIPRO",
+    "M&M",
+    "MARUTI",
+    "RELIANCE",
+    "NTPC",
+    "TATAPOWER",
+    "HAL",
+    "BEL",
+    "IRCTC",
+    "RVNL",
+    "LT",
+    "TATASTEEL",
+    "JSWSTEEL",
+    "HUL",
+    "ITC",
+    "TRENT",
+    "SUNPHARMA",
+    "CIPLA",
+)
 GAME_DOC = "current"
 STARTING_CASH = 100_000.0
 TICK_SECONDS = 10
