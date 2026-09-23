@@ -137,31 +137,17 @@ def money(value: float) -> str:
 
 def render_brand() -> None:
     """
-    Display the Ecofin logo and competition title.
+    Display the Ecofin competition title.
     """
-
-    if LOGO_PATH.exists():
-        logo_col, title_col = st.columns([0.12, 0.88], vertical_alignment="center")
-
-        with logo_col:
-            st.image(str(LOGO_PATH), width=72)
-
-        with title_col:
-            st.markdown(
-                '<div class="ecofin-title">ECOFIN</div>',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                '<div class="ecofin-subtitle">TRADING COMPETITION</div>',
-                unsafe_allow_html=True,
-            )
-
-        st.divider()
-
-    else:
-        st.warning(
-            f"Ecofin logo could not be found at: {LOGO_PATH}"
-        )
+    st.markdown(
+        '<div class="ecofin-title">ECOFIN</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="ecofin-subtitle">TRADING COMPETITION</div>',
+        unsafe_allow_html=True,
+    )
+    st.divider()
 
 
 def chart(
@@ -710,7 +696,7 @@ def dashboard_fragment(
             use_container_width=True,
             config={"displaylogo": False},
         )
-    )
+    
 
     # --------------------------------------------------------
     # Trading panel
@@ -1069,13 +1055,10 @@ def main() -> None:
     # Demo mode when Firebase is not configured
     # --------------------------------------------------------
 
-    if not firebase_is_configured():
-
-        from demo import render
-
-        render()
-
-        return
+    # --------------------------------------------------------
+    # Local mode
+    # --------------------------------------------------------
+    # Firebase is disabled for local development.
 
     # --------------------------------------------------------
     # Public leaderboard stage view
