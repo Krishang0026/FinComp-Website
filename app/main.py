@@ -41,7 +41,7 @@ st.set_page_config(
 # ------------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parents[1]
-LOGO_PATH = ROOT / "assets" / "ecofin_logo.jpeg"
+LOGO_PATH = ROOT / "assets" / "ecofin_logo.png"
 
 
 # ------------------------------------------------------------
@@ -698,21 +698,21 @@ def dashboard_fragment(
 
     with left:
 
-    revealed_candles = public_candles(
-        market[selected],
-        index,
-    )
+        revealed_candles = public_candles(
+            market[selected],
+            index,
+        )
 
-    st.plotly_chart(
-        chart(
-            selected,
-            revealed_candles,
-            period,
-        ),
-        use_container_width=True,
-        config={
-            "displaylogo": False
-        },
+        st.plotly_chart(
+            chart(
+                selected,
+                revealed_candles,
+                period,
+            ),
+            use_container_width=True,
+            config={
+                "displaylogo": False
+            },
     )
 
     # --------------------------------------------------------
