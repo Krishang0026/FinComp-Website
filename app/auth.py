@@ -23,14 +23,22 @@ COOKIE_KEY = "session"
 
 
 def cookies() -> EncryptedCookieManager:
-    manager = EncryptedCookieManager(prefix="trading_comp_", password=st.secrets["app"]["cookie_password"])
+    try:
+        password = st.secrets.get("app", {}).get("cookie_password", "local-dev-secret-cookie-password-key-32chars")
+    except Exception:
+        password = "local-dev-secret-cookie-password-key-32chars"
+    manager = EncryptedCookieManager(prefix="trading_comp_", password=password)
     if not manager.ready():
         st.stop()
     return manager
 
 
 def _api_url(action: str) -> str:
-    return f"https://identitytoolkit.googleapis.com/v1/accounts:{action}?key={st.secrets['firebase_web']['api_key']}"
+    try:
+        api_key = st.secrets.get("firebase_web", {}).get("api_key", "")
+    except Exception:
+        api_key = ""
+    return f"https://identitytoolkit.googleapis.com/v1/accounts:{action}?key={api_key}"
 
 
 def _email(student_id: str) -> str:
@@ -63,8 +71,12 @@ def restore_session(manager: EncryptedCookieManager) -> str | None:
         return None
     try:
         refresh_token = json.loads(raw)["refresh_token"]
+        try:
+            api_key = st.secrets.get("firebase_web", {}).get("api_key", "")
+        except Exception:
+            api_key = ""
         response = requests.post(
-            f"https://securetoken.googleapis.com/v1/token?key={st.secrets['firebase_web']['api_key']}",
+            f"https://securetoken.googleapis.com/v1/token?key={api_key}",
             data={"grant_type": "refresh_token", "refresh_token": refresh_token}, timeout=10,
         )
         response.raise_for_status()

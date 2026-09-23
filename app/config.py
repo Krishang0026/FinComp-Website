@@ -40,7 +40,7 @@ TICK_SECONDS = 10
 def admin_ids() -> set[str]:
     try:
         raw = st.secrets.get("app", {}).get("admin_student_ids", "")
-    except st.errors.StreamlitSecretNotFoundError:
+    except Exception:
         raw = ""
     return {item.strip().upper() for item in raw.split(",") if item.strip()}
 
@@ -50,8 +50,31 @@ def is_admin(student_id: str) -> bool:
 
 
 def firebase_is_configured() -> bool:
-    """A missing secrets file intentionally activates the no-setup local demo."""
+    """A missing or placeholder secrets file intentionally activates the no-setup local demo."""
     try:
-        return bool(st.secrets.get("firebase_service_account", {}) and st.secrets.get("firebase_web", {}).get("api_key"))
-    except st.errors.StreamlitSecretNotFoundError:
+        sec = st.secrets
+        account = dict(sec.get("firebase_service_account", {}))
+        web = dict(sec.get("firebase_web", {}))
+        if not account or not web:
+            return False
+
+        api_key = str(web.get("api_key", "")).strip()
+        if not api_key or api_key in {"Firebase Web API key", "...", "your-api-key"}:
+            return False
+
+        project_id = str(account.get("project_id", "")).strip()
+        if not project_id or project_id in {"your-project-id", "...", ""}:
+            return False
+
+        private_key = str(account.get("private_key", "")).strip()
+        if not private_key or "BEGIN PRIVATE KEY" not in private_key or "..." in private_key:
+            return False
+
+        client_email = str(account.get("client_email", "")).strip()
+        if not client_email or "@" not in client_email or "..." in client_email:
+            return False
+
+        return True
+    except Exception:
         return False
+

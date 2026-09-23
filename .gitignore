@@ -2,6 +2,10 @@
 service-account*.json
 __pycache__/
 .venv/
+.next/
+node_modules/
+.env.local
+.env*.local
 .pytest_cache/
 *.py[cod]
 data/*.csv

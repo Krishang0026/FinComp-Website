@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import demo
 from auth import cookies, restore_session, sign_in, sign_out, sign_up
 from config import ASSETS, firebase_is_configured, is_admin
 from firebase_store import (
@@ -132,7 +133,7 @@ st.markdown(
 # ------------------------------------------------------------
 
 def money(value: float) -> str:
-    return f"${value:,.2f}"
+    return f"₹{value:,.2f}"
 
 
 def render_brand() -> None:
@@ -217,8 +218,6 @@ def chart(
 
     return figure
 
-    return figure
-
 
 def portfolio_table(
     portfolio: dict,
@@ -266,12 +265,26 @@ def render_login(manager) -> None:
 
     st.caption(
         "Sign in with your Student ID. "
-        "Every account begins with $100,000 virtual cash."
+        "Every account begins with ₹100,000 virtual cash."
     )
 
-    signin, signup = st.tabs(
-        ["Sign in", "Create account"]
+    quick_join, signin, signup = st.tabs(
+        ["Quick Join (Name)", "Sign in", "Create account"]
     )
+
+    with quick_join:
+        with st.form("quick_join"):
+            name = st.text_input("Participant Name / Nickname", placeholder="e.g. Rahul Sharma").strip()
+            student_id = st.text_input("Student ID (Optional)", placeholder="e.g. STU101").upper().strip()
+            submitted = st.form_submit_button("START TRADING 🚀", type="primary", use_container_width=True)
+            if submitted:
+                if not name:
+                    st.error("Please enter your name to proceed.")
+                else:
+                    st.session_state["trader_name"] = name
+                    import time
+                    st.session_state["student_id"] = student_id if student_id else f"STU{int(time.time()) % 1000:03d}"
+                    st.rerun()
 
     with signin:
 
@@ -1083,8 +1096,23 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-        leaderboard_fragment()
+        if firebase_is_configured():
+            leaderboard_fragment()
+        else:
+            market = load_market_data()
+            demo_portfolio, index = demo._state()
+            total = portfolio_value(demo_portfolio, market, index)
+            render_brand()
+            st.title("🏆 LIVE LEADERBOARD (DEMO MODE)")
+            st.dataframe(demo._leaderboard(total), hide_index=True, use_container_width=True)
 
+        return
+
+    # --------------------------------------------------------
+    # Demo / Local Name Entry mode
+    # --------------------------------------------------------
+    if not firebase_is_configured() or st.session_state.get("trader_name"):
+        demo.render()
         return
 
     # --------------------------------------------------------

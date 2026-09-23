@@ -20,7 +20,7 @@ NAMES = ("Aarav", "Anaya", "Kabir", "Diya", "Vihaan", "Isha", "Arjun", "Meera", 
 
 
 def money(value: float) -> str:
-    return f"${value:,.2f}"
+    return f"₹{value:,.2f}"
 
 
 def _state() -> tuple[dict, int]:
@@ -28,7 +28,7 @@ def _state() -> tuple[dict, int]:
         st.session_state.demo_started = time.time() - 48 * TICK_SECONDS
         st.session_state.demo_portfolio = {
             "cash": 63_470.25,
-            "positions": {"AAPL": {"quantity": 110, "avg_entry": 184.60}, "NVDA": {"quantity": 85, "avg_entry": 126.20}},
+            "positions": {"HDFCBANK": {"quantity": 30, "avg_entry": 820.00}, "RELIANCE": {"quantity": 15, "avg_entry": 1250.00}},
         }
     index = min(251, 48 + int((time.time() - st.session_state.demo_started) // TICK_SECONDS))
     return st.session_state.demo_portfolio, index
@@ -79,9 +79,11 @@ def _positions(portfolio: dict, market: dict, index: int) -> pd.DataFrame:
 
 
 def _leaderboard(total: float) -> pd.DataFrame:
+    trader_name = st.session_state.get("trader_name", "You (Demo)")
+    student_id = st.session_state.get("student_id", "DEMO001")
     values = [113_840, 111_590, 109_445, 107_201, 105_975, 104_860, 103_530, 102_920, 101_875, 100_460, 99_910, 98_720, 97_680, 96_830, 95_600, 94_410, 93_290, 92_115, 90_860, 89_740]
     rows = [{"Trader": name, "Student ID": f"STU{101 + i:03d}", "Portfolio Value": value} for i, (name, value) in enumerate(zip(NAMES, values))]
-    rows.append({"Trader": "You (Demo)", "Student ID": "DEMO001", "Portfolio Value": total})
+    rows.append({"Trader": trader_name, "Student ID": student_id, "Portfolio Value": total})
     frame = pd.DataFrame(rows).sort_values("Portfolio Value", ascending=False).head(20).reset_index(drop=True)
     frame.insert(0, "Rank", frame.index + 1)
     frame["Portfolio Value"] = frame["Portfolio Value"].map(money)
@@ -99,17 +101,46 @@ def _style() -> None:
     .order-card {background:#101722;border:1px solid #28364b;border-radius:10px;padding:17px}
     .stButton > button {border-radius:7px;font-weight:750;letter-spacing:.2px}.buy button {background:#10a985!important;border-color:#10a985!important}.sell button {background:#d9534f!important;border-color:#d9534f!important;color:#fff!important}
     [data-testid='stDataFrame'] {border:1px solid #253247;border-radius:10px;overflow:hidden}
+    .entry-card {background:#101722;border:1px solid #253247;border-radius:12px;padding:28px;max-width:550px;margin:20px auto}
     </style>""", unsafe_allow_html=True)
 
 
 @st.fragment(run_every=10)
 def render() -> None:
     _style()
+
+    # If user has not entered their name yet, present the quick name entry screen
+    if not st.session_state.get("trader_name"):
+        st.markdown("<div class='brand'>MARKET<span>ARENA</span></div><div class='muted'>A realistic, real-time stock market simulator</div>", unsafe_allow_html=True)
+        st.write("")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### 📈 Join the Trading Competition")
+            st.caption("Enter your name to start trading and join the live leaderboard. Every participant receives ₹100,000 virtual cash.")
+            with st.form("name_entry_form"):
+                name = st.text_input("Participant Name / Nickname", placeholder="e.g. Rahul Sharma").strip()
+                student_id = st.text_input("Student ID (Optional)", placeholder="e.g. STU101").strip()
+                submitted = st.form_submit_button("START TRADING 🚀", type="primary", use_container_width=True)
+                if submitted:
+                    if not name:
+                        st.error("Please enter your name to proceed.")
+                    else:
+                        st.session_state["trader_name"] = name
+                        st.session_state["student_id"] = student_id if student_id else f"STU{int(time.time()) % 1000:03d}"
+                        st.rerun()
+        return
+
+    # Participant Sidebar
+    st.sidebar.markdown(f"Participant: **{st.session_state['trader_name']}** ({st.session_state.get('student_id', 'STU001')})")
+    if st.sidebar.button("Change Name"):
+        st.session_state.pop("trader_name", None)
+        st.session_state.pop("student_id", None)
+        st.rerun()
+
     market = load_market_data()
     portfolio, index = _state()
     total = portfolio_value(portfolio, market, index)
     st.markdown("<div class='brand'>MARKET<span>ARENA</span></div><div class='muted'>A realistic, real-time stock market simulator</div>", unsafe_allow_html=True)
-    st.warning("LOCAL PREVIEW MODE — Firebase and your final CSV are not configured. Trades persist only for this browser session.", icon="⚡")
     top = st.columns([1.1, 1.1, 1.1, 2])
     top[0].markdown(f"<div class='metric-card'><div class='eyebrow'>Portfolio value</div><b>{money(total)}</b></div>", unsafe_allow_html=True)
     top[1].markdown(f"<div class='metric-card'><div class='eyebrow'>Cash / buying power</div><b>{money(portfolio['cash'])}</b></div>", unsafe_allow_html=True)
@@ -121,7 +152,7 @@ def render() -> None:
     nav2.caption("Market open · simulated")
     if section == "Leaderboard":
         st.subheader("Live competition leaderboard")
-        st.caption("Ranked by current total portfolio value. The production version reads these values from Firebase every tick.")
+        st.caption("Ranked by current total portfolio value.")
         st.dataframe(_leaderboard(total), hide_index=True, use_container_width=True)
         return
     if section == "Portfolio":

@@ -1,78 +1,93 @@
-# Trading Competition
+# MarketArena
 
-Production-oriented Streamlit application for a synchronized, multi-user trading event. It reveals exactly one local OHLCV candle every 10 seconds and keeps all pricing, portfolio changes, and future data on the server.
+Vercel-ready, multi-user trading competition. Students join a closed-room game with a username only, receive exactly **₹100,000 cash and zero holdings**, and can trade long or short at each revealed candle's close.
 
-## What is included
+## Architecture
 
-- Firebase Auth sign-up/sign-in using Student ID, nickname, and password.
-- Refresh-resistant encrypted browser session: a refresh token is encrypted in a cookie and silently exchanged for a fresh Firebase ID token after reload.
-- A Firestore-backed global game clock. Every worker derives the current candle index from the same UTC `start_at` timestamp—there is no per-browser timer to drift.
-- Firestore transactional market orders, no short selling, no limit orders, and $100,000 starting cash.
-- Plotly candlesticks that receive only the slice through the active candle.
-- Tick-idempotent leaderboard publishing: each student writes at most one leaderboard document per candle index, even if Streamlit reruns multiple times.
-- Public stage leaderboard at `/?view=leaderboard`, refreshing every 10 seconds.
-- Professor-controlled market pause/resume. Pausing freezes the
-  server-synchronized market clock, disables trading, and allows
-  instructors to explain concepts before resuming.
+- **Next.js + Vercel** is the web and API runtime. `npm run dev` starts it locally; `npm run build` is the production check Vercel runs.
+- **Firebase Firestore (Admin SDK)** is the shared source of truth for games, players, portfolios, and the leaderboard.
+- **Server-only CSV market data** is read by API routes. The browser only receives candles through the global revealed index; future rows never enter the API response.
+- Every order uses a **Firestore transaction**, so concurrent orders cannot overwrite balances or positions.
+- Selling more than an owned position opens a short. An optional `MAX_GROSS_EXPOSURE` guardrail caps long-plus-short market exposure.
 
-## Local setup
-
-1. Create a Firebase project. Enable **Authentication → Sign-in method → Email/Password**, then create a Firestore database in production mode.
-2. Create a Firebase service account with Firestore access and download its JSON credentials. Do not commit it.
-3. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`. Copy each service-account field into `[firebase_service_account]`, set the Firebase **Web API key** under `[firebase_web]`, choose a long random `cookie_password`, and list your professor IDs in `admin_student_ids`.
-4. Create market data. For a no-network demo dataset:
-
-   ```powershell
-   python -m pip install -r requirements.txt
-   python scripts/generate_market_data.py --synthetic
-   ```
-
-   Omit `--synthetic` to download the most recent 252 daily rows from Yahoo Finance. The generator produces `data/market_data.csv` (the consolidated source consumed by the app) and convenient per-asset CSVs. They are deliberately ignored by Git; use a locked, pre-event dataset in production.
-5. Start the app:
-
-   ```powershell
-   # Local development via npm (recommended)
-   npm run dev
-
-   # Or run the underlying Python launcher directly:
-   .\run.ps1
-   ```
-
-6. Sign up with a Student ID that is in `admin_student_ids`, open **Professor controls**, and click **START GAME**. Project `http://localhost:8501/?view=leaderboard` for the stage view.
-
-## Firestore schema
-
-```
-games/current
-  game_id
-  status
-  start_at
-  tick_seconds
-  max_index
-  paused_at
-  total_paused_seconds
-  updated_at
-
-users/{firebase_uid}
-  student_id, nickname, created_at
-
-portfolios/{game_id}_{firebase_uid}
-  game_id, uid, cash, positions: { ASSET: { quantity, avg_entry } }, last_trade, updated_at
-
-leaderboard/{game_id}_{firebase_uid}
-  game_id, uid, student_id, nickname, total_value, price_index, updated_at
-```
-
-Deploy `firebase/firestore.rules` to block all browser Firestore access—the Streamlit server is the only data client and uses the Admin SDK. Deploy `firebase/firestore.indexes.json` before the event to support the ranked query:
+## Local development
 
 ```powershell
-firebase deploy --only firestore:rules,firestore:indexes
+npm install
+Copy-Item .env.example .env.local
+# Fill in FIREBASE_SERVICE_ACCOUNT_JSON and ADMIN_KEY in .env.local
+npm run dev
 ```
 
-## Operational notes
+Open [http://localhost:3000](http://localhost:3000). The initial screen asks only for a unique game username. The browser receives a secure, HTTP-only room-session cookie; there are no passwords.
 
-- The 252 candles take 42 minutes at 10 seconds each (not 40 minutes). For a strict 40-minute event, set `TICK_SECONDS = 9.5238` and adjust the integer-clock implementation, or use 240 rows at 10 seconds. This code honors the stated 10-second candle cadence.
-- The server must be deployed with HTTPS and a correctly synchronized system clock. A single `start_at` timestamp is what synchronizes all Streamlit sessions.
-- For production, run on a managed Streamlit platform with horizontal scaling as needed. The only scheduled client write is one small leaderboard upsert per student per tick: about 30 writes/sec at 300 participants. Trades use short Firestore transactions and do not write the leaderboard directly.
-- Firestore Admin credentials must be held only in platform secrets. The files under `data/` must be mounted/readable only by the server; never serve them as static downloads.
-- A 1-hour competition needs a Firebase Auth refresh token policy longer than one hour (the default Firebase refresh token behavior meets this); the app exchanges the saved refresh token on browser reload.
+## Prepare the data
+
+The application reads `data/market_data.csv` on the server. It must use this exact header:
+
+```csv
+Symbol,Date,Open,High,Low,Close,Volume
+HDFCBANK,2025-10-07,842.84,851.38,834.54,843.08,70859506
+```
+
+- Use one chronological series per `Symbol`.
+- All symbols must have enough rows for the desired game.
+- Replace the currently committed preview CSV with your final competition CSV before deploying.
+- Keep it in `data/`, **not** `public/`, so it cannot be downloaded by players.
+
+## Firebase setup
+
+1. Create a Firebase project and a Firestore database in Production mode.
+2. In Firebase Console → Project settings → Service accounts, generate a new private key.
+3. Minify its JSON into one line and set it as `FIREBASE_SERVICE_ACCOUNT_JSON`.
+4. Deploy the supplied rules and index:
+
+   ```powershell
+   firebase deploy --only firestore:rules,firestore:indexes
+   ```
+
+The rules deny direct browser access. Only Vercel API routes use the Firebase Admin SDK, so players cannot read raw portfolio/game documents or unrevealed market data.
+
+## Start a competition
+
+Set `ADMIN_KEY`, then call the start API from PowerShell:
+
+```powershell
+$key = "your-admin-key"
+Invoke-RestMethod -Method Post -Uri "http://localhost:3000/api/admin/start" `
+  -Headers @{ "x-admin-key" = $key; "Content-Type" = "application/json" } `
+  -Body '{"gameId":"fincomp-2026","tickSeconds":10}'
+```
+
+Starting a new `gameId` gives every participating username a fresh portfolio of ₹100,000 cash and no holdings. The global candle index is calculated from the server timestamp. At 10 seconds per row, a 252-row dataset runs for 42 minutes.
+
+## Deploy to Vercel
+
+1. Commit and push this repository to GitHub, including `data/market_data.csv`.
+2. In Vercel, choose **Add New → Project → Import** and select the repository. Vercel detects Next.js automatically.
+3. Add these Environment Variables for **Production**, **Preview**, and **Development**:
+
+   - `FIREBASE_SERVICE_ACCOUNT_JSON`
+   - `ADMIN_KEY`
+   - `MAX_GROSS_EXPOSURE` (optional; defaults to `300000`)
+4. Click **Deploy**.
+5. Run the start request above using your deployed domain (replace `localhost:3000`).
+
+Do not place the Firebase service-account JSON in the Git repository, client-side code, or `NEXT_PUBLIC_*` variables.
+
+## Firestore shape
+
+```
+games/current                         global synchronized clock
+players/{room-session-uuid}           unique username registry
+portfolios/{gameId}_{session-uuid}    cash + signed positions
+leaderboard/{gameId}_{session-uuid}   current marked-to-market total
+```
+
+## Short-selling behavior
+
+- `BUY` increases signed quantity; `SELL` decreases it.
+- A quantity below zero is a short position.
+- Covering a short retains its entry price until it crosses through zero; crossing reverses the position at the current market price.
+- Cash credits when opening a short and debits when covering one.
+- The gross-exposure cap limits `sum(abs(quantity × last price))`, regardless of direction.

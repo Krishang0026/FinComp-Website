@@ -14,8 +14,14 @@ from market_data import close_at, portfolio_value
 @st.cache_resource(show_spinner=False)
 def db():
     if not firebase_admin._apps:
-        cert = credentials.Certificate(dict(st.secrets["firebase_service_account"]))
-        firebase_admin.initialize_app(cert)
+        try:
+            cert_data = dict(st.secrets["firebase_service_account"])
+            if "private_key" in cert_data and isinstance(cert_data["private_key"], str):
+                cert_data["private_key"] = cert_data["private_key"].replace("\\n", "\n")
+            cert = credentials.Certificate(cert_data)
+            firebase_admin.initialize_app(cert)
+        except Exception as error:
+            raise RuntimeError(f"Firebase credentials invalid or unconfigured: {error}")
     return firestore.client()
 
 
@@ -241,7 +247,7 @@ def execute_market_order(uid: str, game: dict[str, Any], asset: str, quantity: i
                               "updated_at": firestore.SERVER_TIMESTAMP}, merge=True)
         return price
     price = apply(transaction)
-    return f"{side.upper()} {quantity} {asset} @ ${price:,.2f}"
+    return f"{side.upper()} {quantity} {asset} @ ₹{price:,.2f}"
 
 
 def publish_leaderboard(uid: str, profile: dict[str, Any], portfolio: dict[str, Any], game: dict[str, Any], market: dict) -> float:
